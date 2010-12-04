@@ -1,0 +1,13 @@
+GAE API Monitor is a Google AppEngine application that monitors server API
+
+Features:
+* monitors API with JSON output
+* form to add API for tracking, specify URL, http method, parameters
+* users can choose to monitors the following:
+  * change in content 
+  * invalid JSON
+  * request status is not 200/301
+  * request exceeds x seconds specified by user
+* cron job in AppEngine that runs at interval (default 10 minutes)
+
+(source code will be uploaded soon, this is just a test push)
