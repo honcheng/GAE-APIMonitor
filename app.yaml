@@ -1,8 +1,11 @@
-application: GAEAPIMonitor
+application: gaeapimonitor
 version: 1
 runtime: python
 api_version: 1
 
 handlers:
+- url: /apimonitor/.*
+  script: /gaeapimonitor/apimonitor.py    
+
 - url: .*
   script: main.py

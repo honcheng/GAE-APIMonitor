@@ -1,0 +1,6 @@
+cron:
+
+- description: track API changes/validity and server status
+  url: /apimonitor/track
+  schedule: every 10 minutes
+  timezone: Asia/Singapore
