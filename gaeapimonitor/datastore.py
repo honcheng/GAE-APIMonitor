@@ -42,4 +42,5 @@ class APIStorage(db.Model):
 	twitter_user = db.StringProperty()
 	alert_type = db.IntegerProperty() # 0 for status, 1 for DM
 	label = db.StringProperty()
-	
+	update_time = db.DateTimeProperty(auto_now=True)
+	expiry_time = db.IntegerProperty(default=0)

@@ -36,6 +36,7 @@ from google.appengine.ext import db
 from time import time
 import config
 import tweepy
+import datetime
 
 class APIChecker(object):
 	def __init__(self):
@@ -64,7 +65,8 @@ class APIChecker(object):
 		data += '<option value="POST">POST</option>'
 		data += '</select>'
 		data += '</td>'
-		data += '<tr><td>time limit</td><td><input name="time_threshold" size="58" value="0.0"/></td></tr>'
+		data += '<tr><td>request time threshold</td><td><input name="time_threshold" size="58" value="0.0"/></td></tr>'
+		data += '<tr><td>content expiry (seconds)</td><td><input name="expiry_time" size="58" value="0"/></td></tr>'
 		data += '<tr><td>alerts</td><td>'
 		data += '<input type="checkbox" name="has_changed" value=1>content changes<br>'
 		data += '<input type="checkbox" name="valid_json" value=1 checked>invalid JSON<br>'
@@ -124,7 +126,7 @@ class APIChecker(object):
 	def trackAPIChange(self, api):
 		data = ''
 		parameters = simplejson.loads(api.form_fields)
-		response = self.checkAPI(api.url, parameters, api.http_method, api.twitter_user, api.label, alert_type=api.alert_type, has_changed=api.has_changed, valid_json=api.valid_json, is_down=api.is_down, time_threshold=api.time_threshold)
+		response = self.checkAPI(api.url, parameters, api.http_method, api.twitter_user, api.label, expiry_time=api.expiry_time, alert_type=api.alert_type, has_changed=api.has_changed, valid_json=api.valid_json, is_down=api.is_down, time_threshold=api.time_threshold)
 		#data += ">>> %s" % response
 		
 		if api.label=='':
@@ -157,6 +159,13 @@ class APIChecker(object):
 			except:
 				pass
 		
+		if api.expiry_time!=0:
+			try:
+				if response['expired']:
+					message += ' | content expired, age:%s>%s' % (response['age'], api.expiry_time)
+			except:
+				pass
+		
 		if message!=url_id:
 			twitter_users = api.twitter_user.strip().split(",")
 			if api.label=='':
@@ -183,7 +192,9 @@ class APIChecker(object):
 			data += self.trackAPIChange(api)	
 		return data
 			
-	def checkAPI(self, url, form_fields, http_method, twitter_user, label, alert_type=1, has_changed=False, valid_json=True, is_down=True, time_threshold=0.0):
+	def checkAPI(self, url, form_fields, http_method, twitter_user, label, expiry_time=0, alert_type=1, has_changed=False, valid_json=True, is_down=True, time_threshold=0.0):
+		if expiry_time==None:
+			expiry_time = 0
 		form_fields['os'] = 'appengine'
 		query_url, response, status_code, response_time = self.loadJSONContent(url, form_fields, http_method)
 		result = {}
@@ -208,6 +219,8 @@ class APIChecker(object):
 			count = apis.count()
 			for api_storage in apis:
 				
+				should_update = False
+				
 				if api_storage.has_changed:
 					last_valid_response = api_storage.last_valid_response
 					new_json_response = simplejson.dumps(response)
@@ -215,21 +228,44 @@ class APIChecker(object):
 						result['has_changed'] = False
 					else:
 						result['has_changed'] = True
-				
+						should_update = True
+						
 				if api_storage.time_threshold!=0.0:
 					if response_time > api_storage.time_threshold:
 						result['within_time_threshold'] = False
 					else:
 						result['within_time_threshold'] = True
 				
-				api_storage.has_changed = has_changed
-				api_storage.valid_json = valid_json
-				api_storage.label = label
-				api_storage.is_down = is_down
-				api_storage.alert_type = alert_type
-				api_storage.time_threshold = time_threshold
-				api_storage.last_valid_response = simplejson.dumps(response)
-				if twitter_user!='':
+				if api_storage.expiry_time!=0:
+					update_time = api_storage.update_time
+					current_time = datetime.datetime.now()
+					result['age'] = (current_time - update_time).seconds
+					if result['age'] > api_storage.expiry_time:
+						result['expired'] = True
+					else:
+						result['expired'] = False
+				if api_storage.has_changed != has_changed:
+					api_storage.has_changed = has_changed
+					should_update = True	
+				if api_storage.valid_json != valid_json:
+					api_storage.valid_json = valid_json
+					should_update = True	
+				if api_storage.label != label:
+					api_storage.label = label
+					should_update = True
+				if api_storage.is_down != is_down:
+					api_storage.is_down = is_down
+					should_update = True
+				if api_storage.alert_type != alert_type:
+					api_storage.alert_type = alert_type
+					should_update = True
+				if api_storage.time_threshold != time_threshold:
+					api_storage.expiry_time = expiry_time
+					should_update = True
+				if api_storage.last_valid_response != simplejson.dumps(response):
+					api_storage.last_valid_response = simplejson.dumps(response)
+					should_update = True
+				if twitter_user!='' and should_update:
 					api_storage.put()
 				
 				result['id'] = api_storage.key().id()
@@ -252,6 +288,7 @@ class APIChecker(object):
 				api_storage.label = label
 				api_storage.alert_type = alert_type
 				api_storage.time_threshold = time_threshold
+				api_storage.expiry_time = expiry_time
 				api_storage.last_valid_response = simplejson.dumps(response)
 				if twitter_user!='':
 					api_storage.put()

@@ -75,6 +75,8 @@ class CheckAPI(webapp.RequestHandler):
 		else:
 			alert_type = int(alert_type_txt)
 			
+		expiry_time = int(self.request.get('expiry_time'))
+			
 		label = self.request.get('label')
 		
 		parameters = {}
@@ -82,27 +84,31 @@ class CheckAPI(webapp.RequestHandler):
 			parameters = simplejson.loads(form_fields)	
 		checker = APIChecker()
 		
-		data = checker.checkAPI(url, parameters, http_method, twitter_user, label, alert_type=alert_type, has_changed=has_changed, time_threshold=time_threshold, is_down=is_down, valid_json=valid_json)
+		data = checker.checkAPI(url, parameters, http_method, twitter_user, label, expiry_time=expiry_time, alert_type=alert_type, has_changed=has_changed, time_threshold=time_threshold, is_down=is_down, valid_json=valid_json)
 		json_data = simplejson.dumps(data)
 		self.response.out.write(json_data)
 
 class AddAPITracking(webapp.RequestHandler):
 	def get(self):
-		self.response.out.write('abc')
 		checker = APIChecker()
 		html_content = checker.addAPIForm()
 		self.response.out.write(html_content)
 
 class TrackAPIChangesByID(webapp.RequestHandler):
-	def get(self):
-		api_id = int(self.request.get('id'))
-		taskqueue.add(url='/apimonitor/track/id', params={ "id": api_id})
-		
-	def post(self):
+	
+	def track(self):
 		api_id = int(self.request.get('id'))
 		checker = APIChecker()
 		data = checker.trackAPIChangeByID(api_id)
 		self.response.out.write(data)
+	
+	def get(self):
+		self.track()
+		#api_id = int(self.request.get('id'))
+		#taskqueue.add(url='/apimonitor/track/id', params={ "id": api_id})
+		
+	def post(self):
+		self.track()
 		
 
 class TrackAPIChanges(webapp.RequestHandler):
