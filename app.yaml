@@ -4,6 +4,11 @@ runtime: python
 api_version: 1
 
 handlers:
+    
+- url: /static/([^/]+)/(.*)
+  static_files: gaeapimonitor/static/\2
+  upload: gaeapimonitor/static/.*
+    
 - url: /apimonitor/.*
   script: /gaeapimonitor/apimonitor.py    
 

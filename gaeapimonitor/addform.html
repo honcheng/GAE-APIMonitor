@@ -1,0 +1,37 @@
+<html>
+	<head>
+		<link rel="stylesheet" type="text/css" media="screen" href="../static/apimonitor/style.css" />
+	</head>
+	<body>
+		<form method="POST" action="/apimonitor/addapi">
+			<table>
+				<tr><td>url</td><td><input name="url" size="58" /></td></tr>
+				<tr><td>parameters (in JSON)<br>e.g.<br>{"v":"3.1.1"} or<br>{"v":"3.2", "e":"l"}</td><td><textarea rows="10" cols="42" name="form_fields"></textarea></td></tr>
+				<tr><td>http method</td>
+					<td>
+						<select name="http_method">
+							<option value="GET">GET</option>
+							<option value="POST">POST</option>
+						</select>
+					</td>
+				<tr><td>request time threshold</td><td><input name="time_threshold" size="58" value="0.0"/></td></tr>
+				<tr><td>content expiry (seconds)</td><td><input name="expiry_time" size="58" value="0"/></td></tr>
+				<tr><td>alerts</td><td>
+					<input type="checkbox" name="has_changed" value=1>content changes<br>
+					<input type="checkbox" name="valid_json" value=1 checked>invalid JSON<br>
+					<input type="checkbox" name="is_down" value=1 checked>api down<br>
+				</td></tr>
+				<tr><td>twitter user</td><td><input name="twitter_user" size="58" /></td></tr>
+				<tr><td>label (optional)</td><td><input name="label" size="58" /></td></tr>
+				<tr><td>alert type</td>
+					<td>
+						<select name="alert_type">
+							<option value=1>direct message</option>
+							<option value=0>reply</option>
+						</select>
+					</td>
+					<tr><td><input type="submit" value="Submit" /></td></tr>
+			</table>
+		</form>
+	</body>
+</html>

@@ -37,6 +37,8 @@ from time import time
 import config
 import tweepy
 import datetime
+import os
+from google.appengine.ext.webapp import template
 
 class APIChecker(object):
 	def __init__(self):
@@ -52,38 +54,9 @@ class APIChecker(object):
 			pass
 	
 	def addAPIForm(self):
-		data = '<html>'
-		data += '<body>'
-		data += '<form method="POST" action="/apimonitor/addapi">'
-		data += '<table>'
-		data += '<tr><td>url</td><td><input name="url" size="58" /></td></tr>'
-		data += '<tr><td>parameters (in JSON)<br>e.g.<br>{"v":"3.1.1"} or<br>{"v":"3.2", "e":"l"}</td><td><textarea rows="10" cols="42" name="form_fields"></textarea></td></tr>'
-		data += '<tr><td>http method</td>'
-		data += '<td>'
-		data += '<select name="http_method">'
-		data += '<option value="GET">GET</option>'
-		data += '<option value="POST">POST</option>'
-		data += '</select>'
-		data += '</td>'
-		data += '<tr><td>request time threshold</td><td><input name="time_threshold" size="58" value="0.0"/></td></tr>'
-		data += '<tr><td>content expiry (seconds)</td><td><input name="expiry_time" size="58" value="0"/></td></tr>'
-		data += '<tr><td>alerts</td><td>'
-		data += '<input type="checkbox" name="has_changed" value=1>content changes<br>'
-		data += '<input type="checkbox" name="valid_json" value=1 checked>invalid JSON<br>'
-		data += '<input type="checkbox" name="is_down" value=1 checked>api down<br>'
-		data += '</td></tr>'
-		data += '<tr><td>twitter user</td><td><input name="twitter_user" size="58" /></td></tr>'
-		data += '<tr><td>label (optional)</td><td><input name="label" size="58" /></td></tr>'
-		data += '<tr><td>alert type</td>'
-		data += '<td>'
-		data += '<select name="alert_type">'
-		data += '<option value=1>direct message</option>'
-		data += '<option value=0>reply</option>'
-		data += '</select>'
-		data += '</td>'
-		data += '<tr><td><input type="submit" value="Submit" /></td></tr>'
-		data += '</table>'
-		return data
+		path = os.path.join(os.path.dirname(__file__), 'addform.html')
+		form_content = template.render(path, None)
+		return form_content
 		
 	def loadJSONContent(self, url, form_fields, http_method):
 		
