@@ -2,36 +2,68 @@
 	<head>
 		<link rel="stylesheet" type="text/css" media="screen" href="../static/apimonitor/style.css" />
 	</head>
-	<body>
+	<body >
 		<form method="POST" action="/apimonitor/addapi">
-			<table>
-				<tr><td>url</td><td><input name="url" size="58" /></td></tr>
-				<tr><td>parameters (in JSON)<br>e.g.<br>{"v":"3.1.1"} or<br>{"v":"3.2", "e":"l"}</td><td><textarea rows="10" cols="42" name="form_fields"></textarea></td></tr>
-				<tr><td>http method</td>
-					<td>
+			<table align="center">
+				<tr height="40" valign="bottom"><td colspan="2" id="title">monitor this API</td></tr>
+				<tr><td colspan="2"><input class="roundedboxspan" name="url" /></td></tr>
+				<tr><td colspan="2" id="description"  >e.g. http://something.somewhere.com/dothis</td></tr>
+				
+				<tr height="40" valign="bottom"><td colspan="2"  id="title"  >with parameters</td></tr>
+				<tr><td colspan="2"  ><textarea name="form_fields"></textarea></td></tr>
+				<tr><td colspan="2"  id="description"  >in JSON format e.g. { "v":1.0, "d":"here"}</td></tr>
+				
+				<tr height="40" colspan="2" valign="bottom"><td   id="title">http method
 						<select name="http_method">
 							<option value="GET">GET</option>
 							<option value="POST">POST</option>
 						</select>
 					</td>
-				<tr><td>request time threshold</td><td><input name="time_threshold" size="58" value="0.0"/></td></tr>
-				<tr><td>content expiry (seconds)</td><td><input name="expiry_time" size="58" value="0"/></td></tr>
-				<tr><td>alerts</td><td>
-					<input type="checkbox" name="has_changed" value=1>content changes<br>
-					<input type="checkbox" name="valid_json" value=1 checked>invalid JSON<br>
-					<input type="checkbox" name="is_down" value=1 checked>api down<br>
-				</td></tr>
-				<tr><td>twitter user</td><td><input name="twitter_user" size="58" /></td></tr>
-				<tr><td>label (optional)</td><td><input name="label" size="58" /></td></tr>
-				<tr><td>alert type</td>
+				</tr>
+				
+				<tr colspan="2"  height="40" valign="bottom"><td id="title"  >with alias</td></tr>
+				<tr><td colspan="2"  ><input class="roundedboxspan"  name="label"/></td></tr>
+				<tr><td id="description"  colspan="2" >e.g. this API does this and that</td></tr>
+				
+				<tr>
 					<td>
-						<select name="alert_type">
-							<option value=1>direct message</option>
-							<option value=0>reply</option>
-						</select>
+						<table >
+
+							<tr height="40" valign="bottom"><td id="title"  >alert me when</td></tr>
+							<tr height="40"><td >
+								<div class="roundedbox">
+									<input class="alertoptions" type="checkbox" name="has_changed" value=1> content changes<br>
+									<input class="alertoptions" type="checkbox" name="valid_json" value=1 checked> JSON is invalid<br>
+									<input class="alertoptions" type="checkbox" name="is_down" value=1 checked> API is down<br>
+								</div></td>
+							</tr>
+
+							
+						</table>
 					</td>
-					<tr><td><input type="submit" value="Submit" /></td></tr>
+						
+					<td>
+						<table>
+							
+
+							<tr height="40" valign="bottom"><td  id="title">request time</td></tr>
+							<tr><td ><input class="roundedbox" name="time_threshold" value="0"/></td></tr>
+							<tr><td id="description" >in seconds</td></tr>
+
+							<tr height="40" valign="bottom"><td  id="title">content expired</td></tr>
+							<tr><td ><input class="roundedbox" name="expiry_time" value="0"/></td></tr>
+							<tr><td id="description"  >in seconds</td></tr>
+						</table>
+					</td>
+				</tr>
+				
+				<tr colspan="2" height="40" valign="bottom"  ><td id="title">@ twitter handle</td></tr>
+				<tr><td  colspan="2" ><input class="roundedboxspan"  name="twitter_user"/></td></tr>
+				<tr><td colspan="2" id="description">e.g. honcheng</td></tr>
+				
+				<tr align="center"><td colspan="2"><input type="image" src="../static/apimonitor/gaeapimonitor-submit-button.png" name="submit" width="600" height="80"> </td></tr>
 			</table>
+			
 		</form>
 	</body>
 </html>

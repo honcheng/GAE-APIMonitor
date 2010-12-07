@@ -1,0 +1,82 @@
+@import url(http://fonts.googleapis.com/css?family=Josefin+Sans+Std+Light&subset=latin);
+@import url(http://fonts.googleapis.com/css?family=OFL+Sorts+Mill+Goudy+TT&subset=latin);
+@import url(http://fonts.googleapis.com/css?family=Droid+Sans:regular,bold&subset=latin);
+@import url(http://fonts.googleapis.com/css?family=Droid+Sans+Mono&subset=latin);
+
+body{
+	letter-spacing: 4.0px;
+	font: 16px 'Droid Sans', 'Josefin Sans Std Light','Lucida Grande', Verdana, Helvetica, sans-serif;
+	color: #777;
+}
+
+#title{
+	letter-spacing: 4.0px;
+	font: 16px 'Droid Sans', 'Josefin Sans Std Light','Lucida Grande', Verdana, Helvetica, sans-serif;
+	color: #777;
+}
+
+#description{
+	letter-spacing: 3.0px;
+	font: 12px 'Droid Sans', 'Josefin Sans Std Light','Lucida Grande', Verdana, Helvetica, sans-serif;
+	color: #BBB;
+}
+
+div.roundedbox {
+	background-color: #FFF;
+	border: 1px solid #BBB;
+	float:left;
+	margin-top: 0px;
+	margin-right: 40px;
+	height: 155px;
+	width:250px;
+	-webkit-border-radius: 8px; 
+	-moz-border-radius: 8px; 
+	border-radius: 8px;
+}
+
+input.alertoptions{
+	margin-left: 20px;
+	margin-top: 20px;
+	margin-bottom: 20px;
+}
+
+input.roundedbox { 
+	-webkit-border-radius: 8px; 
+	-moz-border-radius: 8px; 
+	border-radius: 8px; 
+	height: 32px;
+	width : 294px;
+	border: 1px solid #BBB;
+	padding: 10;
+	vertical-align: middle;
+	letter-spacing: 2.0px;
+	font: 16px 'Droid Sans', 'Josefin Sans Std Light','Lucida Grande', Verdana, Helvetica, sans-serif;
+	color: #666;
+}
+
+input.roundedboxspan { 
+	-webkit-border-radius: 8px; 
+	-moz-border-radius: 8px; 
+	border-radius: 8px; 
+	height: 32px;
+	width : 600px;
+	border: 1px solid #BBB;
+	padding: 10;
+	vertical-align: middle;
+	letter-spacing: 2.0px;
+	font: 16px 'Droid Sans', 'Josefin Sans Std Light','Lucida Grande', Verdana, Helvetica, sans-serif;
+	color: #666;
+}
+
+textarea { 
+	-webkit-border-radius: 8px; 
+	-moz-border-radius: 8px; 
+	border-radius: 8px; 
+	height: 60px;
+	width : 600px;
+	padding: 10;
+	letter-spacing: 2.0px;
+	font: 21px 'Droid Sans', 'Josefin Sans Std Light','Lucida Grande', Verdana, Helvetica, sans-serif;
+	border: 1px solid #BBB;
+	color: #666;
+}
