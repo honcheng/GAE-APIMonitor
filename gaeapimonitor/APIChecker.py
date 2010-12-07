@@ -59,6 +59,14 @@ class APIChecker(object):
 		return form_content
 		
 	def loadJSONContent(self, url, form_fields, http_method):
+		query_url, response, status_code, response_time = self.loadContent(url, form_fields, http_method)
+		try:
+			json_content = simplejson.loads(response)
+		except:
+			json_content = 0
+		return query_url, json_content, status_code, response_time
+		
+	def loadContent(self, url, form_fields, http_method):
 		
 		try:
 			response_time = 0
@@ -82,11 +90,11 @@ class APIChecker(object):
 			response_time = round(end_time - start_time, 2)
 
 			if result.status_code==200 or result.status_code==301:
-				try:
-					response = simplejson.loads(result.content)
-				except:
-					response = 0
-				return url, response, result.status_code, response_time
+				#try:
+				#	response = simplejson.loads(result.content)
+				#except:
+				#	response = 0
+				return url, result.content, result.status_code, response_time
 			else:
 				return url, 0, result.status_code, response_time
 		except:
@@ -169,7 +177,7 @@ class APIChecker(object):
 		if expiry_time==None:
 			expiry_time = 0
 		form_fields['os'] = 'appengine'
-		query_url, response, status_code, response_time = self.loadJSONContent(url, form_fields, http_method)
+		query_url, response, status_code, response_time = self.loadContent(url, form_fields, http_method)
 		result = {}
 		result['url'] = url
 		result['form_fields'] = simplejson.dumps(form_fields)
@@ -196,8 +204,8 @@ class APIChecker(object):
 				
 				if api_storage.has_changed:
 					last_valid_response = api_storage.last_valid_response
-					new_json_response = simplejson.dumps(response)
-					if last_valid_response==new_json_response:
+					#new_json_response = simplejson.dumps(response)
+					if last_valid_response==response:
 						result['has_changed'] = False
 					else:
 						result['has_changed'] = True
@@ -235,8 +243,8 @@ class APIChecker(object):
 				if api_storage.time_threshold != time_threshold:
 					api_storage.expiry_time = expiry_time
 					should_update = True
-				if api_storage.last_valid_response != simplejson.dumps(response):
-					api_storage.last_valid_response = simplejson.dumps(response)
+				if api_storage.last_valid_response != response: #simplejson.dumps(response):
+					api_storage.last_valid_response = response #simplejson.dumps(response)
 					should_update = True
 				if twitter_user!='' and should_update:
 					api_storage.put()
@@ -262,7 +270,7 @@ class APIChecker(object):
 				api_storage.alert_type = alert_type
 				api_storage.time_threshold = time_threshold
 				api_storage.expiry_time = expiry_time
-				api_storage.last_valid_response = simplejson.dumps(response)
+				api_storage.last_valid_response = response#simplejson.dumps(response)
 				if twitter_user!='':
 					api_storage.put()
 				result['new_entry'] = True
@@ -270,7 +278,11 @@ class APIChecker(object):
 			else:
 				result['new_entry'] = False
 		
-			result['valid_json'] = True
+			try:
+				json_response = simplejson.loads(response)
+				result['valid_json'] = True
+			except:
+				result['valid_json'] = False
 			result['status_code'] = status_code
 			result['response_time'] = response_time
 			return result
