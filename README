@@ -1,6 +1,6 @@
 GAE API Monitor is a Google AppEngine application that monitors server API
 
-Features:
+FEATURES:
 * monitors API with JSON output
 * form to add API for tracking, specify URL, http method, parameters
 * users can choose to monitors the following:
@@ -10,4 +10,41 @@ Features:
   * request exceeds x seconds specified by user
 * cron job in AppEngine that runs at interval (default 10 minutes)
 
-(source code will be uploaded soon, this is just a test push)
+
+INSTRUCTIONS TO INSTALL GAEAPIMONITOR IN APP ENGINE AS A NEW APPLICATION
+1. get the source code here https://github.com/honcheng/GAE-APIMonitor
+2. download and install the Google App Engine SDK and the App Engine Launcher from http://code.google.com/appengine/
+3. you will need a new Twitter account as your Twitter bot.
+  - register a new Twitter account
+  - use the new Twitter account to register a new Twitter application at http://developer.twitter.com
+  - click on the newly created application at developer.twitter.com and copy these information to gaeapimonitor/config.py:
+     - consumer key
+     - consumer secret
+     - access token
+     - access token secret
+4. get the source code for tweepy-appengine from https://github.com/gumptionthomas/tweepy-appengine and put it into the tweepy folder
+5. get the source code for google-diff-match-patch from http://code.google.com/p/google-diff-match-patch/ and put it into the googlediffmatchpatch folder
+6. login to appengine.google.com and register a new application
+7. open app.yaml, and edit the first line "application: gaeapimonitor". Change "gaeapimonitor" to the name of the application that you have just registered
+8. use Google App Engine launcher to deploy the application and wait for the application to go live
+9. access the form at http://[application_name]/appspot.com/apimonitor/add
+
+INSTRUCTION TO ADD GAEAPIMONITOR TO YOUR EXISTING APP ENGINE APPLICATION
+1. go through step 1, 3, 4, and 5
+2. copy these folder to the root of your existing application:
+   - gaeapimonitor
+   - tweepy
+   - googlediffmatchpatch
+3. add the following lines to app.yaml
+
+- url: /static/([^/]+)/(.*)
+  static_files: gaeapimonitor/static/\2
+  upload: gaeapimonitor/static/.*
+    
+- url: /apimonitor/.*
+  script: /gaeapimonitor/apimonitor.py
+
+4. edit main() in gaeapimonitor/apimonitor.py if you want to change the URL to the form. 
+5. deploy as usual
+
+ 
