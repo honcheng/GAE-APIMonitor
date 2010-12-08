@@ -22,3 +22,8 @@ tweepy/streaming.py
 tweepy/streaming.pyc
 tweepy/utils.py
 tweepy/utils.pyc
+/googlediffmatchpatch/__init__.py
+/googlediffmatchpatch/__init__.pyc
+/googlediffmatchpatch/diff_match_patch.py
+/googlediffmatchpatch/diff_match_patch.pyc
+/googlediffmatchpatch/diff_match_patch_test.py

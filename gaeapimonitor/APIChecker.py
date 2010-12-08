@@ -39,6 +39,7 @@ import tweepy
 import datetime
 import os
 from google.appengine.ext.webapp import template
+import googlediffmatchpatch
 
 class APIChecker(object):
 	def __init__(self):
@@ -125,7 +126,7 @@ class APIChecker(object):
 		if api.has_changed:
 			try:
 				if response['has_changed']:
-					message +=  ' | content changed'
+					message +=  ' | content changed %s%%' % response['percentage_change']
 			except:
 				pass
 				
@@ -210,6 +211,18 @@ class APIChecker(object):
 					else:
 						result['has_changed'] = True
 						should_update = True
+						
+						comparer = googlediffmatchpatch.diff_match_patch()
+						diffs = comparer.diff_main(last_valid_response,response)
+
+						levenshtein_value = comparer.diff_levenshtein(diffs)
+						if len(last_valid_response)>=len(response):
+							percentage = float(levenshtein_value)/len(last_valid_response) * 100
+						else:
+							percentage = float(levenshtein_value)/len(response) * 100
+						result['levenshtein'] = levenshtein_value
+						result['percentage_change'] = round(percentage,1)
+					
 						
 				if api_storage.time_threshold!=0.0:
 					if response_time > api_storage.time_threshold:
