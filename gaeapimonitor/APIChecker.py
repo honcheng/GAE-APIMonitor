@@ -40,6 +40,7 @@ import datetime
 import os
 from google.appengine.ext.webapp import template
 import googlediffmatchpatch
+import re
 
 class APIChecker(object):
 	def __init__(self):
@@ -112,9 +113,11 @@ class APIChecker(object):
 		#data += ">>> %s" % response
 		
 		if api.label=='':
-			url_id = "%s | id:%s" % (api.url.split("://")[1], api.key().id())
+			#url_id = "%s | id:%s" % (api.url.split("://")[1], api.key().id())
+			url_id = api.url.split("://")[1]
 		else: 
-			url_id = "%s | id:%s" % (api.label, api.key().id())
+			#url_id = "%s | id:%s" % (api.label, api.key().id())
+			url_id = api.label
 		message = url_id
 		
 		if response['status_code']==200 or response['status_code']==301:
@@ -127,6 +130,10 @@ class APIChecker(object):
 			try:
 				if response['has_changed']:
 					message +=  ' | content changed %s%%' % response['percentage_change']
+					if response.has_key('added'):
+						message +=  ' + %s' % response['added']
+					if response.has_key('removed'):
+						message +=  ' - %s' % response['removed']
 			except:
 				pass
 				
@@ -173,6 +180,14 @@ class APIChecker(object):
 		for api in apis:
 			data += self.trackAPIChange(api)	
 		return data
+	
+	def stripHTMLTags(self, data):
+		p = re.compile(r'<.*?>')
+		return p.sub('', data)
+	
+	def stripWhiteSpace(self, data):
+		p = re.compile(r'\s+')
+		return p.sub(' ', data)
 			
 	def checkAPI(self, url, form_fields, http_method, twitter_user, label, expiry_time=0, alert_type=1, has_changed=False, valid_json=True, is_down=True, time_threshold=0.0):
 		if expiry_time==None:
@@ -195,6 +210,13 @@ class APIChecker(object):
 			except:
 				pass
 			form_fields_dump = simplejson.dumps(form_fields2)
+			
+			try:
+				json_response = simplejson.loads(response)
+				result['valid_json'] = True
+			except:
+				result['valid_json'] = False
+			
 			apis = db.GqlQuery("SELECT * FROM APIStorage WHERE url=:url AND form_fields=:form_fields AND http_method=:http_method AND twitter_user=:twitter_user", url=url, form_fields=form_fields_dump, http_method=http_method, twitter_user=twitter_user)
 			count = 0
 			data = ''
@@ -213,7 +235,25 @@ class APIChecker(object):
 						should_update = True
 						
 						comparer = googlediffmatchpatch.diff_match_patch()
-						diffs = comparer.diff_main(last_valid_response,response)
+						if result['valid_json']:
+							diffs = comparer.diff_main(last_valid_response,response)
+						else:
+							# assume that invalid JSON are HTML
+							a = self.stripWhiteSpace(self.stripHTMLTags(last_valid_response))
+							b = self.stripWhiteSpace(self.stripHTMLTags(response))
+							diffs = comparer.diff_main(a,b)
+						for diff in diffs:
+							status = diff[0]
+							if status==1:
+								text = diff[1]
+								if not result.has_key('added'):
+									result['added'] = []
+								result['added'].append(text)
+							elif status==-1:
+								text = diff[1]
+								if not result.has_key('removed'):
+									result['removed'] = []
+								result['removed'].append(text)
 
 						levenshtein_value = comparer.diff_levenshtein(diffs)
 						if len(last_valid_response)>=len(response):
@@ -291,11 +331,6 @@ class APIChecker(object):
 			else:
 				result['new_entry'] = False
 		
-			try:
-				json_response = simplejson.loads(response)
-				result['valid_json'] = True
-			except:
-				result['valid_json'] = False
 			result['status_code'] = status_code
 			result['response_time'] = response_time
 			return result
