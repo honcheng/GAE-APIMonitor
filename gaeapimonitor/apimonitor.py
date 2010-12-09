@@ -68,10 +68,10 @@ class CheckAPI(webapp.RequestHandler):
 			time_threshold = None;
 		else:
 			time_threshold = float(self.request.get('time_threshold'))
-		
+
 		alert_type_txt = self.request.get('alert_type')
 		if alert_type_txt=='':
-			alert_type = None
+			alert_type = 1
 		else:
 			alert_type = int(alert_type_txt)
 			
