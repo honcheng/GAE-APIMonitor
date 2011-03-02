@@ -41,6 +41,7 @@ import os
 from google.appengine.ext.webapp import template
 import googlediffmatchpatch
 import re
+import md5
 
 class APIChecker(object):
 	def __init__(self):
@@ -120,10 +121,11 @@ class APIChecker(object):
 			url_id = api.label
 		message = url_id
 		
-		if response['status_code']==200 or response['status_code']==301:
-			pass
-		else:
-			message +=  ' | status:%s' % response['status_code']
+		if api.is_down:
+			if response['status_code']==200 or response['status_code']==301:
+				pass
+			else:
+				message +=  ' | status:%s' % response['status_code']
 		
 		
 		if api.has_changed:
@@ -323,7 +325,11 @@ class APIChecker(object):
 				api_storage.alert_type = alert_type
 				api_storage.time_threshold = time_threshold
 				api_storage.expiry_time = expiry_time
-				api_storage.last_valid_response = response#simplejson.dumps(response)
+				try:
+					api_storage.last_valid_response = response#simplejson.dumps(response)
+				except:
+					md5hash = md5.new(response).hexdigest()
+					api_storage.last_valid_response = md5hash
 				if twitter_user!='':
 					api_storage.put()
 				result['new_entry'] = True
