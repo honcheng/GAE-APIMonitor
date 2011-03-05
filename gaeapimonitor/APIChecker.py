@@ -41,6 +41,7 @@ import os
 from google.appengine.ext.webapp import template
 import googlediffmatchpatch
 import re
+import sys
 import md5
 
 class APIChecker(object):
@@ -101,7 +102,7 @@ class APIChecker(object):
 			else:
 				return url, 0, result.status_code, response_time
 		except:
-			return url, 0, 500, 0
+			return url, 0, 408, 0
 	
 	def trackAPIChangeByID(self, api_id):
 		api = APIStorage.get_by_id(api_id)
@@ -112,7 +113,7 @@ class APIChecker(object):
 		parameters = simplejson.loads(api.form_fields)
 		response = self.checkAPI(api.url, parameters, api.http_method, api.twitter_user, api.label, expiry_time=api.expiry_time, alert_type=api.alert_type, has_changed=api.has_changed, valid_json=api.valid_json, is_down=api.is_down, time_threshold=api.time_threshold)
 		#data += ">>> %s" % response
-		
+	
 		if api.label=='':
 			#url_id = "%s | id:%s" % (api.url.split("://")[1], api.key().id())
 			url_id = api.url.split("://")[1]
@@ -131,7 +132,8 @@ class APIChecker(object):
 		if api.has_changed:
 			try:
 				if response['has_changed']:
-					message +=  ' | content changed %s%%' % response['percentage_change']
+					if response.has_key('percentage_change'):
+						message +=  ' | content changed %s%%' % response['percentage_change']
 					if response.has_key('added'):
 						message +=  ' + %s' % response['added']
 					if response.has_key('removed'):
@@ -156,7 +158,6 @@ class APIChecker(object):
 					message += ' | content expired, age:%s>%s' % (response['age'], api.expiry_time)
 			except:
 				pass
-		
 		if message!=url_id:
 			twitter_users = api.twitter_user.strip().split(",")
 			if api.label=='':
@@ -229,9 +230,13 @@ class APIChecker(object):
 				
 				if api_storage.has_changed:
 					last_valid_response = api_storage.last_valid_response
+					md5hash = md5.new(response).hexdigest()
 					#new_json_response = simplejson.dumps(response)
 					if last_valid_response==response:
 						result['has_changed'] = False
+					elif last_valid_response==md5hash:
+						result['has_changed'] = False
+						response = md5hash
 					else:
 						result['has_changed'] = True
 						should_update = True
@@ -243,7 +248,13 @@ class APIChecker(object):
 							# assume that invalid JSON are HTML
 							a = self.stripWhiteSpace(self.stripHTMLTags(last_valid_response))
 							b = self.stripWhiteSpace(self.stripHTMLTags(response))
-							diffs = comparer.diff_main(a,b)
+							try:
+								diffs = comparer.diff_main(a,b)
+							except:
+								response = md5hash
+								a = self.stripWhiteSpace(self.stripHTMLTags(last_valid_response))
+								b = self.stripWhiteSpace(self.stripHTMLTags(response))
+								diffs = comparer.diff_main(a,b)
 						for diff in diffs:
 							status = diff[0]
 							if status==1:
