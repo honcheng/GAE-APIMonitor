@@ -44,6 +44,7 @@ import re
 import sys
 import md5
 import bitly
+import logging
 
 class APIChecker(object):
 	def __init__(self):
@@ -173,8 +174,15 @@ class APIChecker(object):
 					else:
 						link += "&%s=%s" % (key, value)
 				bitly_api = bitly.BitLy(login=config.bitly_username, apikey=config.bitly_apikey) 
-				shorten_link = bitly_api.shorten(link)['results'][link]['shortUrl']
-				message += ' %s' % shorten_link	
+				try:
+					escaped_link = link.replace("&","%26")
+					bitly_component = bitly_api.shorten(escaped_link)
+					logging.info("%s", bitly_component)
+					shorten_link = bitly_component['results'][link]['shortUrl']
+					message += ' %s' % shorten_link	
+				except:
+					logging.error("error getting bitly link %s", link)
+					message += ' %s' % link
 			
 			if api.label=='':
 				message += " | params:%s" % api.form_fields 
