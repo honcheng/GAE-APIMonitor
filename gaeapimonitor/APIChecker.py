@@ -43,6 +43,7 @@ import googlediffmatchpatch
 import re
 import sys
 import md5
+import bitly
 
 class APIChecker(object):
 	def __init__(self):
@@ -134,16 +135,17 @@ class APIChecker(object):
 				if response['has_changed']:
 					if response.has_key('percentage_change'):
 						message +=  ' | content changed %s%%' % response['percentage_change']
-					if response.has_key('added'):
-						message +=  ' + %s' % response['added']
-					if response.has_key('removed'):
-						message +=  ' - %s' % response['removed']
+					#if response.has_key('added'):
+					#	message +=  ' + %s' % response['added']
+					#if response.has_key('removed'):
+					#	message +=  ' - %s' % response['removed']
 			except:
 				pass
-				
-		if api.valid_json:
-			if not response['valid_json']:
-				message +=  ' | x JSON'
+		
+		if response['status_code']!=408:	
+			if api.valid_json:
+				if not response['valid_json']:
+					message +=  ' | x JSON'
 				
 		if api.time_threshold!=0.0:
 			try:
@@ -160,6 +162,20 @@ class APIChecker(object):
 				pass
 		if message!=url_id:
 			twitter_users = api.twitter_user.strip().split(",")
+			
+			if api.http_method=="GET":
+				link = api.url
+				for i in range(0,len(parameters.keys())):
+					key = parameters.keys()[i]
+					value = parameters[key]
+					if i==0:
+						link += "?%s=%s" % (key, value)
+					else:
+						link += "&%s=%s" % (key, value)
+				bitly_api = bitly.BitLy(login=config.bitly_username, apikey=config.bitly_apikey) 
+				shorten_link = bitly_api.shorten(link)['results'][link]['shortUrl']
+				message += ' %s' % shorten_link	
+			
 			if api.label=='':
 				message += " | params:%s" % api.form_fields 
 			if len(message)>140:
@@ -230,8 +246,10 @@ class APIChecker(object):
 				
 				if api_storage.has_changed:
 					last_valid_response = api_storage.last_valid_response
+					response = response.decode('utf8','replace')
+					response = response.encode('ascii','replace')
 					md5hash = md5.new(response).hexdigest()
-					#new_json_response = simplejson.dumps(response)
+					
 					if last_valid_response==response:
 						result['has_changed'] = False
 					elif last_valid_response==md5hash:
@@ -240,7 +258,7 @@ class APIChecker(object):
 					else:
 						result['has_changed'] = True
 						should_update = True
-						
+
 						comparer = googlediffmatchpatch.diff_match_patch()
 						if result['valid_json']:
 							diffs = comparer.diff_main(last_valid_response,response)
@@ -276,7 +294,7 @@ class APIChecker(object):
 						result['levenshtein'] = levenshtein_value
 						result['percentage_change'] = round(percentage,1)
 					
-						
+				
 				if api_storage.time_threshold!=0.0:
 					if response_time > api_storage.time_threshold:
 						result['within_time_threshold'] = False
@@ -337,6 +355,8 @@ class APIChecker(object):
 				api_storage.time_threshold = time_threshold
 				api_storage.expiry_time = expiry_time
 				try:
+					response = response.decode('utf8','replace')
+					response = response.encode('ascii','replace')
 					api_storage.last_valid_response = response#simplejson.dumps(response)
 				except:
 					md5hash = md5.new(response).hexdigest()

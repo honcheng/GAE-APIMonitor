@@ -36,3 +36,7 @@ twitterbot_consumer_key = "insert-consumer-key-here"
 twitterbot_consumer_secret = "insert-consumer-secret-here"
 twitterbot_access_token = "insert-access-token-here"
 twitterbot_access_token_secret = "insert-access-token-secret-here"
+
+# details about bitly
+bitly_username = "insert-bitly-usernae-here"
+bitly_apikey = "insert-bitly-api-key-here"
