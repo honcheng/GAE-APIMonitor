@@ -37,6 +37,7 @@ from google.appengine.api import taskqueue
 import tweepy
 from gaeapimonitor.APIChecker import APIChecker
 from gaeapimonitor.datastore import APIStorage
+import gaeapimonitor.config
 
 class CheckAPI(webapp.RequestHandler):
 	def get(self):
@@ -57,6 +58,11 @@ class CheckAPI(webapp.RequestHandler):
 		has_changed = bool(self.request.get('has_changed'))
 		is_down = bool(self.request.get('is_down'))
 		valid_json = bool(self.request.get('valid_json'))
+		min_percentage_changed = self.request.get('min_percentage_changed')
+		if min_percentage_changed=='':
+			min_percentage_changed = None;
+		else:
+			min_percentage_changed = float(self.request.get('min_percentage_changed'))
 		"""
 		if has_changed_txt=='':
 			has_changed = None;
@@ -84,7 +90,7 @@ class CheckAPI(webapp.RequestHandler):
 			parameters = simplejson.loads(form_fields)	
 		checker = APIChecker()
 		
-		data = checker.checkAPI(url, parameters, http_method, twitter_user, label, expiry_time=expiry_time, alert_type=alert_type, has_changed=has_changed, time_threshold=time_threshold, is_down=is_down, valid_json=valid_json)
+		data = checker.checkAPI(url, parameters, http_method, twitter_user, label, expiry_time=expiry_time, alert_type=alert_type, has_changed=has_changed, time_threshold=time_threshold, is_down=is_down, valid_json=valid_json, min_percentage_changed=min_percentage_changed, n_trial=1)
 		json_data = simplejson.dumps(data)
 		self.response.out.write(json_data)
 
@@ -98,8 +104,9 @@ class TrackAPIChangesByID(webapp.RequestHandler):
 	
 	def track(self):
 		api_id = int(self.request.get('id'))
+		n_trial = int(self.request.get('n_trial'))
 		checker = APIChecker()
-		data = checker.trackAPIChangeByID(api_id)
+		data = checker.trackAPIChangeByID(api_id, n_trial)
 		self.response.out.write(data)
 	
 	def get(self):
@@ -109,7 +116,63 @@ class TrackAPIChangesByID(webapp.RequestHandler):
 		
 	def post(self):
 		self.track()
+	
+class RemoveAPIByID(webapp.RequestHandler):
+	def get(self):
+		api_id = self.request.get('id')
+		checker = APIChecker()
+		checker.removeAPIByID(api_id)
+
+class CheckAPIChangesByID(webapp.RequestHandler):
+	def get(self):
+		api_id = self.request.get('id')
+		checker = APIChecker()
+		api, response, status_code, changes = checker.checkAPIChangeByID(api_id)
 		
+		if response==0:
+			response = ""
+		
+		if api==-1:
+			self.response.out.write("this alert does not exists")
+		else:	
+			htmlContent = "<html><head><title>%s</title></head>" % api.url
+			htmlContent += "<body spacing='0' marginwidth='0' marginheight='0' >"
+			htmlContent += """<SCRIPT TYPE=\"text/javascript\">
+						<!--
+						function removeAlert()
+						{
+							var response = confirm(\"Are you sure you want to remove this alert?\")
+							if (response)
+							{
+								window.location = "remove?id=%s";
+							}
+						}
+						//-->
+						</SCRIPT>""" % api_id
+			#changed_text = ''
+			#if changes!=-1:
+			#	if changes.has_key('added'):
+			#		added = changes['added']
+			#		changed_text += '<br><b>ADDED</b>'
+			#		for item in added:
+			#			changed_text += '<br>%s' % item
+			#	if changes.has_key('removed'):
+			#		removed = changes['removed']
+			#		changed_text += '<br><b>REMOVED</b>'
+			#		for item in removed:
+			#			changed_text += '<br>%s' % item
+			
+			htmlContent += "<form><table width='100%%' border='0' cellspacing=0><tr bgcolor=#CCCCCC height=35 ><td><input type='button' value='remove alert' onClick='removeAlert()'/></td></tr>"
+			htmlContent += "<tr bgcolor=#CCCCCC height=1><td >%s</td></tr><tr bgcolor=#BBBBBB height=1><td ></td></tr></table></form>" % changes
+			
+			#htmlContent += "<iframe src='%s' width='100%%' height ='100%%' frameborder=0 scrolling='auto'>" % "http://www.google.com"
+			#htmlContent += "<p>Your browser does not support iframes.</p>"
+			#htmlContent += "</iframe>"
+			htmlContent += "%s" % response
+			htmlContent += "</body>"
+			htmlContent += "</html>"
+		
+			self.response.out.write(htmlContent)
 
 class TrackAPIChanges(webapp.RequestHandler):
 	def get(self):
@@ -122,15 +185,21 @@ class TrackAPIChanges(webapp.RequestHandler):
 		apis = checker.getTrackedAPIs()
 		for api in apis:
 			api_id = int(api.key().id())
-			taskqueue.add(url='/apimonitor/track/id', params={ "id": api_id})
-		
+			taskqueue.add(url='/apimonitor/track/id', params={ "id": api_id, "n_trial": 1})
+
+class Test(webapp.RequestHandler):
+	def get(self):
+		self.response.out.write("Test %s" % gaeapimonitor.config.bitly_username)	
 	
 def main():
 	application = webapp.WSGIApplication([
-	  ('/apimonitor/addapi', CheckAPI),
-	  ('/apimonitor/add', AddAPITracking),
-	  ('/apimonitor/track', TrackAPIChanges),
-	  ('/apimonitor/track/id', TrackAPIChangesByID),
+	  ('/apimonitor/test', Test),
+	  (gaeapimonitor.config.url_addapi, CheckAPI),
+	  (gaeapimonitor.config.url_add, AddAPITracking),
+	  (gaeapimonitor.config.url_track, TrackAPIChanges),
+	  (gaeapimonitor.config.url_track_id, TrackAPIChangesByID),
+	  (gaeapimonitor.config.url_check, CheckAPIChangesByID),
+	  (gaeapimonitor.config.url_remove, RemoveAPIByID),
       ], debug=True)
 	util.run_wsgi_app(application)
 

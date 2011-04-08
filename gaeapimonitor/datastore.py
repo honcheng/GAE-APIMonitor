@@ -31,10 +31,12 @@
 from google.appengine.ext import db
 
 class APIStorage(db.Model):
+	api_id = db.StringProperty()
 	url = db.StringProperty()
 	form_fields = db.StringProperty()
 	http_method = db.StringProperty()
 	has_changed = db.BooleanProperty(default=False)
+	min_percentage_changed = db.FloatProperty(default=0.0)
 	last_valid_response = db.TextProperty()
 	valid_json = db.BooleanProperty(default=True)
 	is_down = db.BooleanProperty(default=True)
@@ -44,3 +46,5 @@ class APIStorage(db.Model):
 	label = db.StringProperty()
 	update_time = db.DateTimeProperty(auto_now=True)
 	expiry_time = db.IntegerProperty(default=0)
+	last_status_code = db.IntegerProperty(default=200)
+	last_valid_response_before_changes = db.TextProperty()

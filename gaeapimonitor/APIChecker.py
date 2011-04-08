@@ -28,6 +28,7 @@
 # @copyright	2010	Muh Hon Cheng
 # 
 
+
 from django.utils import simplejson
 import urllib
 from google.appengine.api import urlfetch
@@ -45,19 +46,53 @@ import sys
 import md5
 import bitly
 import logging
+from google.appengine.api import taskqueue
+from google.appengine.api import mail
 
 class APIChecker(object):
 	def __init__(self):
 		pass
-		
+	
+
 	def tweetStatus(self, status):
 		auth = tweepy.OAuthHandler(config.twitterbot_consumer_key, config.twitterbot_consumer_secret)
 		auth.set_access_token(config.twitterbot_access_token, config.twitterbot_access_token_secret)
 		try:
 			bot = tweepy.API(auth)
-			bot.update_status(status)
-		except:
-			pass
+			result = bot.update_status(status)
+		except tweepy.TweepError, e:
+			if len(e.args)==2:
+				auth2 = tweepy.OAuthHandler(config.twitterbot_consumer_key, config.twitterbot_consumer_secret)
+				auth2.set_access_token(config.twitterbot_access_token_alternative, config.twitterbot_access_token_secret_alternative)
+				bot2 = tweepy.API(auth2)
+				bot2.update_status(status)
+				message, response = e
+				logging.warning("Tweepy error : %s, %s", message, response)
+			elif len(e.args)==1:
+				auth2 = tweepy.OAuthHandler(config.twitterbot_consumer_key, config.twitterbot_consumer_secret)
+				auth2.set_access_token(config.twitterbot_access_token_alternative, config.twitterbot_access_token_secret_alternative)
+				bot2 = tweepy.API(auth2)
+				bot2.update_status(status)
+				logging.warning('Tweepy error : %s', e)
+			else:
+				logging.debug('Tweepy error - unknown')
+		except Exception, e:
+			#pass
+			logging.warning("failed to send out alerts with APIMonitor, attempt to use APIMonitor2 %s" % e)
+			try:
+				pass
+				#auth2 = tweepy.OAuthHandler(config.twitterbot_consumer_key, config.twitterbot_consumer_secret)
+				#auth2.set_access_token(config.twitterbot_access_token_alternative, config.twitterbot_access_token_secret_alternative)
+				#bot2 = tweepy.API(auth2)
+				#bot2.update_status(status)
+			except:
+				pass
+			#	logging.warning("failed to send out alerts with APIMonitor and APIMonitor2 %s" % error2)
+			#	mail.send_mail(sender="APIMonitor <appengineapimonitor@gmail.com>",
+			#	              to="honcheng <honcheng@gmail.com>",
+			#	              subject="APIMonitor Alert",
+			#	              body=status)
+
 	
 	def addAPIForm(self):
 		path = os.path.join(os.path.dirname(__file__), 'addform.html')
@@ -65,14 +100,14 @@ class APIChecker(object):
 		return form_content
 		
 	def loadJSONContent(self, url, form_fields, http_method):
-		query_url, response, status_code, response_time = self.loadContent(url, form_fields, http_method)
+		query_url, response, status_code, response_time = self.loadContent(url, form_fields, http_method, 1)
 		try:
 			json_content = simplejson.loads(response)
 		except:
 			json_content = 0
 		return query_url, json_content, status_code, response_time
 		
-	def loadContent(self, url, form_fields, http_method):
+	def loadContent(self, url, form_fields, http_method, n_tries):
 		
 		try:
 			response_time = 0
@@ -104,18 +139,71 @@ class APIChecker(object):
 			else:
 				return url, 0, result.status_code, response_time
 		except:
-			return url, 0, 408, 0
+			#return self.loadContent(url, form_fields, http_method, n_tries+1)
+			
+			if n_tries!=config.n_times_to_retry_408_before_sending_alerts:
+				return self.loadContent(url, form_fields, http_method, n_tries+1)
+			else:
+				return url, 0, 408, 0
 	
-	def trackAPIChangeByID(self, api_id):
+	def trackAPIChangeByID(self, api_id, n_trial):
 		api = APIStorage.get_by_id(api_id)
-		return self.trackAPIChange(api)
+		if api.api_id==None:
+			api_id = "%s-%s" % (api.url, datetime.datetime.now())
+			api_id = md5.new(api_id).hexdigest()
+			api.api_id = api_id
+			api.put()
+		return self.trackAPIChange(api, n_trial)
 	
-	def trackAPIChange(self, api):
+	def removeAPIByID(self, api_id):
+		apis = db.GqlQuery("SELECT * FROM APIStorage WHERE api_id=:api_id", api_id=api_id)
+		for api in apis:
+			api.delete()
+	
+	def checkAPIChangeByID(self, api_id):
+		apis = db.GqlQuery("SELECT * FROM APIStorage WHERE api_id=:api_id", api_id=api_id)
+		for api in apis:
+			parameters = simplejson.loads(api.form_fields)
+			query_url, response, status_code, response_time = self.loadContent(api.url, parameters, api.http_method, 1)
+			if response!=0:
+				response = response.decode('utf8','replace')
+				response = response.encode('ascii','replace')
+			changes = ''
+			if api.has_changed:
+				comparer = googlediffmatchpatch.diff_match_patch()
+				a = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response))
+				b = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response_before_changes))
+				try:
+					diffs = comparer.diff_main(a,b)
+					comparer.diff_cleanupSemantic(diffs)
+					for diff in diffs:
+						status = diff[0]
+						if status==1:
+							text = diff[1]
+							#if not changes.has_key('added'):
+							#	changes['added'] = []
+							#changes['added'].append(text)
+							changes += '<b>ADDED</b> %s <br>' % text
+						elif status==-1:
+							text = diff[1]
+							#if not changes.has_key('removed'):
+							#	changes['removed'] = []
+							#changes['removed'].append(text)
+							changes += '<b>REMOVED</b> %s <br>' % text
+				except Exception,e:
+					pass
+					#logging.warning('>>> %s ' % e)
+					#logging.warning("error comparing responses OLD[%s] NEW[%s]" % (api.last_valid_response,api.last_valid_response_before_changes))	
+			#logging.warning("changes <>>>>>>> %s" % changes)
+			return api, response, status_code, changes
+		return -1, -1, -1, {}
+			
+	def trackAPIChange(self, api, n_trial):
 		data = ''
 		parameters = simplejson.loads(api.form_fields)
-		response = self.checkAPI(api.url, parameters, api.http_method, api.twitter_user, api.label, expiry_time=api.expiry_time, alert_type=api.alert_type, has_changed=api.has_changed, valid_json=api.valid_json, is_down=api.is_down, time_threshold=api.time_threshold)
+		response = self.checkAPI(api.url, parameters, api.http_method, api.twitter_user, api.label, expiry_time=api.expiry_time, alert_type=api.alert_type, has_changed=api.has_changed, valid_json=api.valid_json, is_down=api.is_down, time_threshold=api.time_threshold, min_percentage_changed=api.min_percentage_changed, n_trial=n_trial)
 		#data += ">>> %s" % response
-	
+
 		if api.label=='':
 			#url_id = "%s | id:%s" % (api.url.split("://")[1], api.key().id())
 			url_id = api.url.split("://")[1]
@@ -126,27 +214,67 @@ class APIChecker(object):
 		
 		if api.is_down:
 			if response['status_code']==200 or response['status_code']==301:
-				pass
+				if api.last_status_code!=200 and api.last_status_code!=301:
+					message += ' | OK (status changed from %s to %s)' % (api.last_status_code, response['status_code'])
+				#api.last_status_code = response['status_code']
+				#api.put()
+			elif response['status_code']==408:
+				logging.info("STATUS: %s (%s)" % (response['status_code'], n_trial) )
+				if n_trial==config.n_times_to_retry_408_before_sending_alerts:
+					if api.last_status_code!=408:
+						message +=  ' | request timeout (408)'
+						#api.last_status_code = response['status_code']
+						#api.put()
+					else:
+						return
+				else:
+					_id = int(api.key().id())
+					taskqueue.add(url=config.url_track_id, params={ "id": _id, "n_trial": n_trial+1})
+					#api.last_status_code = response['status_code']
+					#api.put()
+					return
 			else:
-				message +=  ' | status:%s' % response['status_code']
-		
+				logging.debug("STATUS: %s (%s)" % (response['status_code'], n_trial) )
+				if response['status_code']==500:
+					message +=  ' | internal server error (500)'
+				elif response['status_code']==502:
+					message +=  ' | bad gateway (502)'
+				elif response['status_code']==503:
+					message +=  ' | service unavailable (503)'
+				elif response['status_code']==504:
+					message +=  ' | gateway timeout (504)'
+				elif response['status_code']==404:
+					message +=  ' | not found (404)'
+				else:
+					message +=  ' | status:%s' % response['status_code']
+				#api.last_status_code = response['status_code']
+				#api.put()
+		else:
+			pass
+			#api.last_status_code = response['status_code']
+			#api.put()
 		
 		if api.has_changed:
 			try:
 				if response['has_changed']:
 					if response.has_key('percentage_change'):
-						message +=  ' | content changed %s%%' % response['percentage_change']
-					#if response.has_key('added'):
-					#	message +=  ' + %s' % response['added']
-					#if response.has_key('removed'):
-					#	message +=  ' - %s' % response['removed']
+						if response['percentage_change'] > api.min_percentage_changed:
+							message +=  ' | content changed %s%%' % response['percentage_change']
+							if response.has_key('added'):
+								items = response['added']
+								for item in items:
+									message +=  ' (+) %s' % item
+							if response.has_key('removed'):
+								items = response['removed']
+								for item in items:
+									message +=  ' (-) %s' % item
 			except:
 				pass
 		
-		if response['status_code']!=408:	
+		if response['status_code'] not in [404, 408, 500, 502, 503, 504]: #!=408 and response['status_code']!=500 and response['status_code']!=502 and response['status_code']!=503:	
 			if api.valid_json:
 				if not response['valid_json']:
-					message +=  ' | x JSON'
+					message +=  ' | invalid JSON'
 				
 		if api.time_threshold!=0.0:
 			try:
@@ -164,7 +292,30 @@ class APIChecker(object):
 		if message!=url_id:
 			twitter_users = api.twitter_user.strip().split(",")
 			
-			if api.http_method=="GET":
+			if api.api_id!=None:
+				if os.environ.get('HTTP_HOST'): 
+					host = os.environ['HTTP_HOST'] 
+				else: 
+					host = os.environ['SERVER_NAME']
+				link = "http://%s/apimonitor/check?id=%s" % (host, api.api_id)
+				bitly_api = bitly.BitLy(login=config.bitly_username, apikey=config.bitly_apikey) 
+				try:
+					escaped_link = link.replace("&","%26")
+					bitly_component = bitly_api.shorten(escaped_link)
+					logging.debug("%s", bitly_component)
+					shorten_link = bitly_component['results'][link]['shortUrl']
+					
+					if message.find('|')!=-1:	
+						message = message.replace('|','%s |' % shorten_link,1)
+					else:
+						message += ' %s' % shorten_link
+				except:
+					logging.error("error getting bitly link %s", link)
+					if message.find('|')!=-1:	
+						message = message.replace('|','%s |' % link, 1)
+					else:
+						message += ' %s' % link
+			elif api.http_method=="GET":
 				link = api.url
 				for i in range(0,len(parameters.keys())):
 					key = parameters.keys()[i]
@@ -177,12 +328,18 @@ class APIChecker(object):
 				try:
 					escaped_link = link.replace("&","%26")
 					bitly_component = bitly_api.shorten(escaped_link)
-					logging.info("%s", bitly_component)
+					logging.debug("%s", bitly_component)
 					shorten_link = bitly_component['results'][link]['shortUrl']
-					message += ' %s' % shorten_link	
+					if message.find('|')!=-1:	
+						message = message.replace('|','%s |' % shorten_link,1)
+					else:
+						message += ' %s' % shorten_link
 				except:
 					logging.error("error getting bitly link %s", link)
-					message += ' %s' % link
+					if message.find('|')!=-1:	
+						message = message.replace('|','%s |' % link, 1)
+					else:
+						message += ' %s' % link
 			
 			if api.label=='':
 				message += " | params:%s" % api.form_fields 
@@ -190,7 +347,8 @@ class APIChecker(object):
 				message = message[:140]
 			for user in twitter_users:
 				user = user.strip()
-				status = "D %s %s" % (user, message)	
+				status = "D %s %s" % (user, message)
+				logging.info("TWEET : %s", status)	
 				self.tweetStatus(status)
 				data += "<br><br>%s<br><br>" % status
 		else:
@@ -205,46 +363,58 @@ class APIChecker(object):
 		apis = db.GqlQuery("SELECT * FROM APIStorage")
 		data = ''
 		for api in apis:
-			data += self.trackAPIChange(api)	
+			data += self.trackAPIChange(api, 1)	
 		return data
 	
 	def stripHTMLTags(self, data):
+		if not data:
+			return ''
 		p = re.compile(r'<.*?>')
 		return p.sub('', data)
 	
 	def stripWhiteSpace(self, data):
+		if not data:
+			return ''
 		p = re.compile(r'\s+')
 		return p.sub(' ', data)
 			
-	def checkAPI(self, url, form_fields, http_method, twitter_user, label, expiry_time=0, alert_type=1, has_changed=False, valid_json=True, is_down=True, time_threshold=0.0):
+	def checkAPI(self, url, form_fields, http_method, twitter_user, label, expiry_time=0, alert_type=1, has_changed=False, valid_json=True, is_down=True, time_threshold=0.0, min_percentage_changed=0.0, n_trial=1):
 		if expiry_time==None:
 			expiry_time = 0
 		form_fields['os'] = 'appengine'
-		query_url, response, status_code, response_time = self.loadContent(url, form_fields, http_method)
+		query_url, response, status_code, response_time = self.loadContent(url, form_fields, http_method, n_trial)
 		result = {}
 		result['url'] = url
 		result['form_fields'] = simplejson.dumps(form_fields)
 		result['http_method'] = http_method
+		
+		form_fields2 = form_fields
+		try:
+			del form_fields2['os']
+		except:
+			pass
+		form_fields_dump = simplejson.dumps(form_fields2)
+		
+		try:
+			json_response = simplejson.loads(response)
+			result['valid_json'] = True
+		except:
+			result['valid_json'] = False
+		
+		apis = db.GqlQuery("SELECT * FROM APIStorage WHERE url=:url AND form_fields=:form_fields AND http_method=:http_method AND twitter_user=:twitter_user", url=url, form_fields=form_fields_dump, http_method=http_method, twitter_user=twitter_user)
+		
+
 		if not response:
 			result['valid_json'] = False
 			result['status_code'] = status_code
 			result['response_time'] = response_time
+			for api_storage in apis:
+				if n_trial==config.n_times_to_retry_408_before_sending_alerts:
+					api_storage.last_status_code = status_code
+					api_storage.put()
+					#logging.warning(">>>>>>>>>>>>>>status %s %s" % (api_storage.last_status_code, status_code))
 			return result
 		else:
-			form_fields2 = form_fields
-			try:
-				del form_fields2['os']
-			except:
-				pass
-			form_fields_dump = simplejson.dumps(form_fields2)
-			
-			try:
-				json_response = simplejson.loads(response)
-				result['valid_json'] = True
-			except:
-				result['valid_json'] = False
-			
-			apis = db.GqlQuery("SELECT * FROM APIStorage WHERE url=:url AND form_fields=:form_fields AND http_method=:http_method AND twitter_user=:twitter_user", url=url, form_fields=form_fields_dump, http_method=http_method, twitter_user=twitter_user)
 			count = 0
 			data = ''
 			count = apis.count()
@@ -270,17 +440,20 @@ class APIChecker(object):
 						comparer = googlediffmatchpatch.diff_match_patch()
 						if result['valid_json']:
 							diffs = comparer.diff_main(last_valid_response,response)
+							comparer.diff_cleanupSemantic(diffs)
 						else:
 							# assume that invalid JSON are HTML
 							a = self.stripWhiteSpace(self.stripHTMLTags(last_valid_response))
 							b = self.stripWhiteSpace(self.stripHTMLTags(response))
 							try:
 								diffs = comparer.diff_main(a,b)
+								comparer.diff_cleanupSemantic(diffs)
 							except:
 								response = md5hash
 								a = self.stripWhiteSpace(self.stripHTMLTags(last_valid_response))
 								b = self.stripWhiteSpace(self.stripHTMLTags(response))
 								diffs = comparer.diff_main(a,b)
+								comparer.diff_cleanupSemantic(diffs)
 						for diff in diffs:
 							status = diff[0]
 							if status==1:
@@ -300,8 +473,10 @@ class APIChecker(object):
 						else:
 							percentage = float(levenshtein_value)/len(response) * 100
 						result['levenshtein'] = levenshtein_value
-						result['percentage_change'] = round(percentage,1)
-					
+						if percentage>1:
+							result['percentage_change'] = round(percentage,1)
+						else:
+							result['percentage_change'] = round(percentage,4)
 				
 				if api_storage.time_threshold!=0.0:
 					if response_time > api_storage.time_threshold:
@@ -336,10 +511,21 @@ class APIChecker(object):
 					api_storage.expiry_time = expiry_time
 					should_update = True
 				if api_storage.last_valid_response != response: #simplejson.dumps(response):
+					response = response.decode('utf8','replace')
+					response = response.encode('ascii','replace')
+					api_storage.last_valid_response_before_changes = api_storage.last_valid_response
 					api_storage.last_valid_response = response #simplejson.dumps(response)
 					should_update = True
+				if api_storage.last_status_code != status_code:
+					api_storage.last_status_code = status_code
+					should_update = True
+				
 				if twitter_user!='' and should_update:
-					api_storage.put()
+					try:
+						
+						api_storage.put()
+					except:
+						logging.warning("unable to write to datastore")
 				
 				result['id'] = api_storage.key().id()
 			if count==0:
@@ -350,7 +536,11 @@ class APIChecker(object):
 					else:
 						result['within_time_threshold'] = True
 				
+				api_id = "%s-%s" % (url, datetime.datetime.now())
+				api_id = md5.new(api_id).hexdigest()
+				
 				api_storage = APIStorage()
+				api_storage.api_id = api_id
 				api_storage.url = url
 				api_storage.http_method = http_method
 				api_storage.form_fields = form_fields_dump
@@ -362,6 +552,7 @@ class APIChecker(object):
 				api_storage.alert_type = alert_type
 				api_storage.time_threshold = time_threshold
 				api_storage.expiry_time = expiry_time
+				api_storage.min_percentage_changed = min_percentage_changed
 				try:
 					response = response.decode('utf8','replace')
 					response = response.encode('ascii','replace')

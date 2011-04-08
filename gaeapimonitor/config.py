@@ -36,7 +36,22 @@ twitterbot_consumer_key = "insert-consumer-key-here"
 twitterbot_consumer_secret = "insert-consumer-secret-here"
 twitterbot_access_token = "insert-access-token-here"
 twitterbot_access_token_secret = "insert-access-token-secret-here"
+# alternative account to use, in case daily 250 quota is exceeded
+# have not put this to test yet
+twitterbot_access_token_alternative = "276415537-yxCaRVAorBdHHv4jnDFRRlKZABXDQJDzABRVid3x"
+twitterbot_access_token_secret_alternative = "vFbGfR6U3nIrPbknm0pPiPaHYkk68H14AGKS6BrY1g"
+
+# details about retry
+n_times_to_retry_408_before_sending_alerts = 2
 
 # details about bitly
-bitly_username = "insert-bitly-usernae-here"
+bitly_username = "insert-bitly-username-here"
 bitly_apikey = "insert-bitly-api-key-here"
+
+# urls
+url_track_id = '/apimonitor/track/id'
+url_remove = '/apimonitor/remove'
+url_check = '/apimonitor/check'
+url_track = '/apimonitor/track'
+url_add = '/apimonitor/add'
+url_addapi = '/apimonitor/addapi'
