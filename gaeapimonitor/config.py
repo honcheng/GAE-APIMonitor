@@ -48,6 +48,9 @@ n_times_to_retry_408_before_sending_alerts = 2
 bitly_username = "insert-bitly-username-here"
 bitly_apikey = "insert-bitly-api-key-here"
 
+# details about goo.gl
+googl_apikey = 'insert-googl-api-key-here'
+
 # urls
 url_track_id = '/apimonitor/track/id'
 url_remove = '/apimonitor/remove'

@@ -38,6 +38,7 @@ import tweepy
 from gaeapimonitor.APIChecker import APIChecker
 from gaeapimonitor.datastore import APIStorage
 import gaeapimonitor.config
+from gaeapimonitor.googleurlshortener import Googl
 
 class CheckAPI(webapp.RequestHandler):
 	def get(self):
@@ -176,7 +177,7 @@ class CheckAPIChangesByID(webapp.RequestHandler):
 
 class TrackAPIChanges(webapp.RequestHandler):
 	def get(self):
-		taskqueue.add(url='/apimonitor/track')
+		taskqueue.add(url=gaeapimonitor.config.url_track)
 		
 	def post(self):
 		checker = APIChecker()
@@ -185,11 +186,14 @@ class TrackAPIChanges(webapp.RequestHandler):
 		apis = checker.getTrackedAPIs()
 		for api in apis:
 			api_id = int(api.key().id())
-			taskqueue.add(url='/apimonitor/track/id', params={ "id": api_id, "n_trial": 1})
+			taskqueue.add(url=gaeapimonitor.config.url_track_id, params={ "id": api_id, "n_trial": 1})
 
 class Test(webapp.RequestHandler):
 	def get(self):
-		self.response.out.write("Test %s" % gaeapimonitor.config.bitly_username)	
+		#shortener = Googl(gaeapimonitor.config.googl_apikey)
+		#url = shortener.shorten('http://honcheng-test.appspot.com/apimonitor/check?id=da60b0629e84a530cf79ce84c6fa18b8&test=1')
+		url = ShortUrl(response)
+		self.response.out.write("Test %s" % url)	
 	
 def main():
 	application = webapp.WSGIApplication([

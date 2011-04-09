@@ -48,12 +48,33 @@ import bitly
 import logging
 from google.appengine.api import taskqueue
 from google.appengine.api import mail
+from gaeapimonitor.googleurlshortener import Googl
 
 class APIChecker(object):
 	def __init__(self):
 		pass
 	
-
+	def shortenUrl(self, link):
+		
+		googl_api = Googl(config.googl_apikey)
+		try:
+			googl_component = googl_api.shorten(link)
+			logging.debug("goo.gl : %s", googl_component)
+			shorten_link = googl_component['id']
+			return shorten_link
+		except Exception, e:
+			logging.error("error getting goo.gl link %s : %s", link, e)
+			try:
+				bitly_api = bitly.BitLy(login=config.bitly_username, apikey=config.bitly_apikey) 
+				escaped_link = link.replace("&","%26")
+				bitly_component = bitly_api.shorten(escaped_link)
+				logging.debug("bit.ly : %s", bitly_component)
+				shorten_link = bitly_component['results'][link]['shortUrl']
+				return shorten_link
+			except Exception, e2:
+				logging.error("error getting bit.ly link %s : %s", link, e2)
+				return link
+		
 	def tweetStatus(self, status):
 		auth = tweepy.OAuthHandler(config.twitterbot_consumer_key, config.twitterbot_consumer_secret)
 		auth.set_access_token(config.twitterbot_access_token, config.twitterbot_access_token_secret)
@@ -171,8 +192,9 @@ class APIChecker(object):
 			changes = ''
 			if api.has_changed:
 				comparer = googlediffmatchpatch.diff_match_patch()
-				a = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response))
-				b = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response_before_changes))
+				a = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response_before_changes))
+				b = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response))
+				
 				try:
 					diffs = comparer.diff_main(a,b)
 					comparer.diff_cleanupSemantic(diffs)
@@ -297,24 +319,12 @@ class APIChecker(object):
 					host = os.environ['HTTP_HOST'] 
 				else: 
 					host = os.environ['SERVER_NAME']
-				link = "http://%s/apimonitor/check?id=%s" % (host, api.api_id)
-				bitly_api = bitly.BitLy(login=config.bitly_username, apikey=config.bitly_apikey) 
-				try:
-					escaped_link = link.replace("&","%26")
-					bitly_component = bitly_api.shorten(escaped_link)
-					logging.debug("%s", bitly_component)
-					shorten_link = bitly_component['results'][link]['shortUrl']
-					
-					if message.find('|')!=-1:	
-						message = message.replace('|','%s |' % shorten_link,1)
-					else:
-						message += ' %s' % shorten_link
-				except:
-					logging.error("error getting bitly link %s", link)
-					if message.find('|')!=-1:	
-						message = message.replace('|','%s |' % link, 1)
-					else:
-						message += ' %s' % link
+				link = "http://%s%s?id=%s" % (host,config.url_check, api.api_id)
+				shorten_link = self.shortenUrl(link)
+				if message.find('|')!=-1:	
+					message = message.replace('|','%s |' % shorten_link,1)
+				else:
+					message += ' %s' % shorten_link
 			elif api.http_method=="GET":
 				link = api.url
 				for i in range(0,len(parameters.keys())):
@@ -324,22 +334,11 @@ class APIChecker(object):
 						link += "?%s=%s" % (key, value)
 					else:
 						link += "&%s=%s" % (key, value)
-				bitly_api = bitly.BitLy(login=config.bitly_username, apikey=config.bitly_apikey) 
-				try:
-					escaped_link = link.replace("&","%26")
-					bitly_component = bitly_api.shorten(escaped_link)
-					logging.debug("%s", bitly_component)
-					shorten_link = bitly_component['results'][link]['shortUrl']
-					if message.find('|')!=-1:	
-						message = message.replace('|','%s |' % shorten_link,1)
-					else:
-						message += ' %s' % shorten_link
-				except:
-					logging.error("error getting bitly link %s", link)
-					if message.find('|')!=-1:	
-						message = message.replace('|','%s |' % link, 1)
-					else:
-						message += ' %s' % link
+				shorten_link = self.shortenUrl(link)
+				if message.find('|')!=-1:	
+					message = message.replace('|','%s |' % shorten_link,1)
+				else:
+					message += ' %s' % shorten_link
 			
 			if api.label=='':
 				message += " | params:%s" % api.form_fields 
@@ -422,10 +421,12 @@ class APIChecker(object):
 				
 				should_update = False
 				
+				response = response.decode('utf8','replace')
+				response = response.encode('ascii','replace')
 				if api_storage.has_changed:
 					last_valid_response = api_storage.last_valid_response
-					response = response.decode('utf8','replace')
-					response = response.encode('ascii','replace')
+					#response = response.decode('utf8','replace')
+					#response = response.encode('ascii','replace')
 					md5hash = md5.new(response).hexdigest()
 					
 					if last_valid_response==response:
@@ -511,8 +512,6 @@ class APIChecker(object):
 					api_storage.expiry_time = expiry_time
 					should_update = True
 				if api_storage.last_valid_response != response: #simplejson.dumps(response):
-					response = response.decode('utf8','replace')
-					response = response.encode('ascii','replace')
 					api_storage.last_valid_response_before_changes = api_storage.last_valid_response
 					api_storage.last_valid_response = response #simplejson.dumps(response)
 					should_update = True
