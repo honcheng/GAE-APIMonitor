@@ -39,6 +39,7 @@ from gaeapimonitor.APIChecker import APIChecker
 from gaeapimonitor.datastore import APIStorage
 import gaeapimonitor.config
 from gaeapimonitor.googleurlshortener import Googl
+import logging
 
 class CheckAPI(webapp.RequestHandler):
 	def get(self):
@@ -128,7 +129,7 @@ class CheckAPIChangesByID(webapp.RequestHandler):
 	def get(self):
 		api_id = self.request.get('id')
 		checker = APIChecker()
-		api, response, status_code, changes = checker.checkAPIChangeByID(api_id)
+		api, response, response_before_changes, status_code, changes = checker.checkAPIChangeByID(api_id)
 		
 		if response==0:
 			response = ""
@@ -170,6 +171,10 @@ class CheckAPIChangesByID(webapp.RequestHandler):
 			#htmlContent += "<p>Your browser does not support iframes.</p>"
 			#htmlContent += "</iframe>"
 			htmlContent += "%s" % response
+			if response_before_changes is not None:
+				htmlContent += "<form><table width='100%%' border='0' cellspacing=0><tr bgcolor=#CCCCCC height=35 ><td>Before changes</td></tr>"
+				htmlContent += "</table></form>"
+				htmlContent += "%s" % response_before_changes
 			htmlContent += "</body>"
 			htmlContent += "</html>"
 		
@@ -185,8 +190,9 @@ class TrackAPIChanges(webapp.RequestHandler):
 		#self.response.out.write(data)
 		apis = checker.getTrackedAPIs()
 		for api in apis:
-			api_id = int(api.key().id())
-			taskqueue.add(url=gaeapimonitor.config.url_track_id, params={ "id": api_id, "n_trial": 1})
+			if api.should_monitor:
+				api_id = int(api.key().id())
+				taskqueue.add(url=gaeapimonitor.config.url_track_id, params={ "id": api_id, "n_trial": 1})
 
 class Test(webapp.RequestHandler):
 	def get(self):

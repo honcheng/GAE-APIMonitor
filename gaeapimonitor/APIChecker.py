@@ -138,6 +138,7 @@ class APIChecker(object):
 				result = urlfetch.fetch(url=url,
 			                        payload=form_data,
 			                        method=urlfetch.POST,
+									deadline=100,
 			                        headers={'Content-Type': 'application/x-www-form-urlencoded'})
 			else :
 				for i in range(0,len(form_fields.keys())):
@@ -147,7 +148,9 @@ class APIChecker(object):
 						url += "?%s=%s" % (key, value)
 					else:
 						url += "&%s=%s" % (key, value)
-				result = urlfetch.fetch(url)
+				result = urlfetch.fetch(url=url,
+									method=urlfetch.GET,
+									deadline=100)
 			end_time = time()
 			response_time = round(end_time - start_time, 2)
 
@@ -159,9 +162,9 @@ class APIChecker(object):
 				return url, result.content, result.status_code, response_time
 			else:
 				return url, 0, result.status_code, response_time
-		except:
+		except Exception, e:
 			#return self.loadContent(url, form_fields, http_method, n_tries+1)
-			
+			logging.warning("unable to load content. error : %s", e)
 			if n_tries!=config.n_times_to_retry_408_before_sending_alerts:
 				return self.loadContent(url, form_fields, http_method, n_tries+1)
 			else:
@@ -169,11 +172,14 @@ class APIChecker(object):
 	
 	def trackAPIChangeByID(self, api_id, n_trial):
 		api = APIStorage.get_by_id(api_id)
-		if api.api_id==None:
-			api_id = "%s-%s" % (api.url, datetime.datetime.now())
-			api_id = md5.new(api_id).hexdigest()
-			api.api_id = api_id
-			api.put()
+		if api is not None:
+			if api.api_id is None:
+				api_id = "%s-%s" % (api.url, datetime.datetime.now())
+				api_id = md5.new(api_id).hexdigest()
+				api.api_id = api_id
+				api.put()
+		else:
+			logging.warning("trackAPIChangeByID - %s does not exists", api_id)
 		return self.trackAPIChange(api, n_trial)
 	
 	def removeAPIByID(self, api_id):
@@ -185,12 +191,14 @@ class APIChecker(object):
 		apis = db.GqlQuery("SELECT * FROM APIStorage WHERE api_id=:api_id", api_id=api_id)
 		for api in apis:
 			parameters = simplejson.loads(api.form_fields)
-			query_url, response, status_code, response_time = self.loadContent(api.url, parameters, api.http_method, 1)
-			if response!=0:
-				response = response.decode('utf8','replace')
-				response = response.encode('ascii','replace')
+			#query_url, response, status_code, response_time = self.loadContent(api.url, parameters, api.http_method, 1)
+			#if response!=0:
+			#	response = response.decode('utf8','replace')
+			#	response = response.encode('ascii','replace')
+			#else:
+			#	response = api.last_valid_response
 			changes = ''
-			if api.has_changed:
+			if api.has_changed and api.last_valid_response_before_changes is not None:
 				comparer = googlediffmatchpatch.diff_match_patch()
 				a = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response_before_changes))
 				b = self.stripWhiteSpace(self.stripHTMLTags(api.last_valid_response))
@@ -214,10 +222,7 @@ class APIChecker(object):
 							changes += '<b>REMOVED</b> %s <br>' % text
 				except Exception,e:
 					pass
-					#logging.warning('>>> %s ' % e)
-					#logging.warning("error comparing responses OLD[%s] NEW[%s]" % (api.last_valid_response,api.last_valid_response_before_changes))	
-			#logging.warning("changes <>>>>>>> %s" % changes)
-			return api, response, status_code, changes
+			return api, api.last_valid_response, api.last_valid_response_before_changes, api.last_status_code, changes
 		return -1, -1, -1, {}
 			
 	def trackAPIChange(self, api, n_trial):
@@ -237,7 +242,7 @@ class APIChecker(object):
 		if api.is_down:
 			if response['status_code']==200 or response['status_code']==301:
 				if api.last_status_code!=200 and api.last_status_code!=301:
-					message += ' | OK (status changed from %s to %s)' % (api.last_status_code, response['status_code'])
+					message += ' | OK (%s to %s)' % (api.last_status_code, response['status_code'])
 				#api.last_status_code = response['status_code']
 				#api.put()
 			elif response['status_code']==408:
@@ -301,7 +306,7 @@ class APIChecker(object):
 		if api.time_threshold!=0.0:
 			try:
 				if not response['within_time_threshold']:
-					message +=  ' | rtime:%s>%s' % (response['response_time'], api.time_threshold)
+					message +=  ' | request time: %ssecs (>%ssecs threshold)' % (response['response_time'], api.time_threshold)
 			except:
 				pass
 		
@@ -407,11 +412,37 @@ class APIChecker(object):
 			result['valid_json'] = False
 			result['status_code'] = status_code
 			result['response_time'] = response_time
+			count = apis.count()
 			for api_storage in apis:
 				if n_trial==config.n_times_to_retry_408_before_sending_alerts:
 					api_storage.last_status_code = status_code
 					api_storage.put()
 					#logging.warning(">>>>>>>>>>>>>>status %s %s" % (api_storage.last_status_code, status_code))
+			if count==0:
+				api_id = "%s-%s" % (url, datetime.datetime.now())
+				api_id = md5.new(api_id).hexdigest()
+				api_storage = APIStorage()
+				api_storage.api_id = api_id
+				api_storage.url = url
+				api_storage.http_method = http_method
+				api_storage.form_fields = form_fields_dump
+				api_storage.has_changed = has_changed
+				api_storage.valid_json = valid_json
+				api_storage.is_down = is_down
+				api_storage.twitter_user = twitter_user
+				api_storage.label = label
+				api_storage.alert_type = alert_type
+				api_storage.time_threshold = time_threshold
+				api_storage.expiry_time = expiry_time
+				api_storage.last_status_code = status_code
+				api_storage.min_percentage_changed = min_percentage_changed
+				if twitter_user!='':
+					api_storage.put()
+			else:
+				result['new_entry'] = False
+		
+			result['status_code'] = status_code
+			result['response_time'] = response_time
 			return result
 		else:
 			count = 0
@@ -469,7 +500,9 @@ class APIChecker(object):
 								result['removed'].append(text)
 
 						levenshtein_value = comparer.diff_levenshtein(diffs)
-						if len(last_valid_response)>=len(response):
+						if last_valid_response is None:
+							percentage = 100
+						elif len(last_valid_response)>=len(response):
 							percentage = float(levenshtein_value)/len(last_valid_response) * 100
 						else:
 							percentage = float(levenshtein_value)/len(response) * 100
